@@ -508,11 +508,15 @@ public class IMTServiceImpl implements IMTService {
                 for (Object itemVOs : jsonObject.getJSONObject("data").getJSONArray("reservationItemVOS")) {
                     JSONObject item = JSON.parseObject(itemVOs.toString());
                     // 预约时间在24小时内的
-                    if (item.getInteger("status") == 2 && DateUtil.between(item.getDate("reservationTime"), new Date(), DateUnit.HOUR) < 24) {
-                        String logContent = DateUtil.formatDate(item.getDate("reservationTime")) + " 申购" + item.getString("itemName") + "成功";
-                        IMTLogFactory.reservation(iUser, logContent);
+                    if (DateUtil.between(item.getDate("reservationTime"), new Date(), DateUnit.HOUR) < 24) {
+                        if (item.getInteger("status") == 2) {
+                            String logContent = DateUtil.formatDate(item.getDate("reservationTime")) + " 申购" + item.getString("itemName") + "成功";
+                            IMTLogFactory.reservation(iUser, logContent);
+                        } else {
+                            String logContent = DateUtil.formatDate(item.getDate("reservationTime")) + " 申购" + item.getString("itemName") + "失败";
+                            IMTLogFactory.reservation(iUser, logContent);
+                        }
                     }
-
                 }
             } catch (Exception e) {
                 logger.error("查询申购结果失败:失败原因{}", e.getMessage());
