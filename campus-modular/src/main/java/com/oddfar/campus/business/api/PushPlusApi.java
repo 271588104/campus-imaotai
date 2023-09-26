@@ -37,6 +37,15 @@ public class PushPlusApi {
 
     }
 
+    public static void sendNotice(IUser iUser, String title, String content) {
+        String token = iUser.getPushPlusToken();
+        if (StringUtils.isEmpty(token)) {
+            return;
+        }
+        AsyncManager.me().execute(sendNotice(token, title, content, "txt"));
+    }
+
+
     /**
      * push推送
      *

@@ -13,7 +13,11 @@ import cn.hutool.http.Method;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.oddfar.campus.business.api.PushPlusApi;
+import com.oddfar.campus.business.entity.IShop;
 import com.oddfar.campus.business.entity.IUser;
+import com.oddfar.campus.business.mapper.IShopMapper;
 import com.oddfar.campus.business.mapper.IUserMapper;
 import com.oddfar.campus.business.service.IMTLogFactory;
 import com.oddfar.campus.business.service.IMTService;
@@ -47,6 +51,9 @@ public class IMTServiceImpl implements IMTService {
 
     @Autowired
     private IUserMapper iUserMapper;
+
+    @Autowired
+    private IShopMapper iShopMapper;
 
     @Autowired
     private RedisCache redisCache;
@@ -180,53 +187,66 @@ public class IMTServiceImpl implements IMTService {
         }
         String[] items = iUser.getItemCode().split("@");
 
-        String logContent = "";
+        String title = "";
+        String content = "";
+        String shopId;
+        String shopName = "";
         for (String itemId : items) {
             try {
-                String shopId = iShopService.getShopId(iUser.getShopType(), itemId,
+                shopId = iShopService.getShopId(iUser.getShopType(), itemId,
                         iUser.getProvinceName(), iUser.getCityName(), iUser.getLat(), iUser.getLng());
+                QueryWrapper<IShop> queryWrapper = new QueryWrapper<>();
+                queryWrapper.eq("i_shop_id", shopId);
+                IShop iShop = iShopMapper.selectOne(queryWrapper);
+                shopName = iShop.getName();
                 //预约
-                JSONObject json = reservation(iUser, itemId, shopId);
-                logContent += String.format("[预约项目]：%s\n[shopId]：%s\n[结果返回]：%s\n\n", itemId, shopId, json.toString());
+                JSONObject reservationRes = reservation(iUser, itemId, shopId);
+                content = String.format("【预约项目】%s\n【门店】%s\n【用户】%s\n【手机号】%s\n【结果返回】%s", itemId, shopName, iUser.getRemark(), iUser.getMobile(), reservationRes);
+                if (reservationRes.getInteger("code") == 2000) {
+                    title = String.format("【预约成功】%s", iUser.getRemark());
+                } else {
+                    title = String.format("【预约失败】%s", iUser.getRemark());
+                }
+
             } catch (Exception e) {
-                logContent += String.format("执行报错--[预约项目]：%s\n[结果返回]：%s\n\n", itemId, e.getMessage());
+                title = String.format("【预约出错】%s", iUser.getRemark());
+                content = String.format("【预约项目】%s\n【门店】%s\n【用户】%s\n【手机号】%s\n【结果返回】%s", itemId, shopName, iUser.getRemark(), iUser.getMobile(), e.getMessage());
+            } finally {
+                //日志记录
+                IMTLogFactory.reservation(iUser, title, content);
+                //日志推送
+                PushPlusApi.sendNotice(iUser, title, content);
             }
         }
-
-//        try {
-//            //预约后领取耐力值
-//            String energyAward = getEnergyAward(iUser);
-//            logContent += "[申购耐力值]:" + energyAward;
-//        } catch (Exception e) {
-//            logContent += "执行报错--[申购耐力值]:" + e.getMessage();
-//        }
-        //日志记录
-        IMTLogFactory.reservation(iUser, logContent);
         //预约后延迟领取耐力值
         getEnergyAwardDelay(iUser);
     }
 
     /**
      * 延迟执行：获取申购耐力值，并记录日志
-     *
-     * @param iUser
      */
     public void getEnergyAwardDelay(IUser iUser) {
-        Runnable runnable = new Runnable() {
-            @Override
-            public void run() {
-                String logContent = "";
-                //sleep 10秒
-                try {
-                    Thread.sleep(10000);
-                    //预约后领取耐力值
-                    String energyAward = getEnergyAward(iUser);
-                    logContent += "[申购耐力值]:" + energyAward;
-                } catch (Exception e) {
-                    logContent += "执行报错--[申购耐力值]:" + e.getMessage();
+        Runnable runnable = () -> {
+            String title = "";
+            String content = "";
+            try {
+                Thread.sleep(10000);
+                //预约后领取耐力值
+                JSONObject energyAwardRes = getEnergyAward(iUser);
+                content = String.format("【手机号】%s\n【用户】%s\n【结果返回】%s", iUser.getMobile(), iUser.getRemark(), energyAwardRes.toString());
+                if (energyAwardRes.getInteger("code") == 200) {
+                    title = String.format("【领取耐力值成功】%s", iUser.getRemark());
+                } else {
+                    title = String.format("【领取耐力值失败】%s", iUser.getRemark());
                 }
+            } catch (Exception e) {
+                title = String.format("【领取耐力值出错】%s", iUser.getRemark());
+                content = String.format("手机号】%s【用户】%s\n【\n【结果返回】%s", iUser.getMobile(), iUser.getRemark(), e.getMessage());
+            } finally {
                 //日志记录
-                IMTLogFactory.reservation(iUser, logContent);
+                IMTLogFactory.reservation(iUser, title, content);
+                //日志推送
+                PushPlusApi.sendNotice(iUser, title, content);
             }
         };
         new Thread(runnable).start();
@@ -235,7 +255,7 @@ public class IMTServiceImpl implements IMTService {
 
     //获取申购耐力值
     @Override
-    public String getEnergyAward(IUser iUser) {
+    public JSONObject getEnergyAward(IUser iUser) {
         String url = "https://h5.moutai519.com.cn/game/isolationPage/getUserEnergyAward";
         HttpRequest request = HttpUtil.createRequest(Method.POST, url);
 
@@ -247,14 +267,7 @@ public class IMTServiceImpl implements IMTService {
                 .cookie("MT-Token-Wap=" + iUser.getCookie() + ";MT-Device-ID-Wap=" + iUser.getDeviceId() + ";");
 
         String body = request.execute().body();
-
-        JSONObject jsonObject = JSONObject.parseObject(body);
-        if (jsonObject.getInteger("code") != 200) {
-            String message = jsonObject.getString("message");
-            throw new ServiceException(message);
-        }
-
-        return body;
+        return JSONObject.parseObject(body);
     }
 
     @Override
@@ -264,7 +277,6 @@ public class IMTServiceImpl implements IMTService {
             String s = travelReward(iUser);
             logContent += "[获得旅行奖励]:" + s;
         } catch (Exception e) {
-//            e.printStackTrace();
             logContent += "执行报错--[获得旅行奖励]:" + e.getMessage();
         }
         //日志记录
@@ -397,7 +409,7 @@ public class IMTServiceImpl implements IMTService {
             throw new ServiceException(message);
         }
 
-        Long endTime = travelEndTime * 1000;
+        long endTime = travelEndTime * 1000;
         // 未开始
         if (status == 1) {
             if (energy < 100) {
@@ -468,7 +480,6 @@ public class IMTServiceImpl implements IMTService {
         try {
             int minute = DateUtil.minute(new Date());
             List<IUser> iUsers = iUserService.selectReservationUserByMinute(minute);
-//        List<IUser> iUsers = iUserService.selectReservationUser();
 
             for (IUser iUser : iUsers) {
                 logger.info("「开始获得旅行奖励」" + iUser.getMobile());
@@ -509,13 +520,17 @@ public class IMTServiceImpl implements IMTService {
                     JSONObject item = JSON.parseObject(itemVOs.toString());
                     // 预约时间在24小时内的
                     if (DateUtil.between(item.getDate("reservationTime"), new Date(), DateUnit.HOUR) < 24) {
+                        String title;
+                        String content = String.format("【申购项目】%s\n【申购时间】%s", item.getString("itemName"), item.getDate("reservationTime"));
                         if (item.getInteger("status") == 2) {
-                            String logContent = DateUtil.formatDate(item.getDate("reservationTime")) + " 申购" + item.getString("itemName") + "成功";
-                            IMTLogFactory.reservation(iUser, logContent);
+                            title = String.format("【申购成功】%s", iUser.getRemark());
                         } else {
-                            String logContent = DateUtil.formatDate(item.getDate("reservationTime")) + " 申购" + item.getString("itemName") + "失败";
-                            IMTLogFactory.reservation(iUser, logContent);
+                            title = String.format("【申购失败】%s", iUser.getRemark());
                         }
+                        //日志记录
+                        IMTLogFactory.reservation(iUser, title, content);
+                        //日志推送
+                        PushPlusApi.sendNotice(iUser, title, content);
                     }
                 }
             } catch (Exception e) {
@@ -532,15 +547,12 @@ public class IMTServiceImpl implements IMTService {
         Map<String, Object> info = new HashMap<>();
         info.put("count", 1);
         info.put("itemId", itemId);
-
         itemArray.add(info);
 
         map.put("itemInfoList", itemArray);
-
         map.put("sessionId", iShopService.getCurrentSessionId());
         map.put("userId", iUser.getUserId().toString());
         map.put("shopId", shopId);
-
         map.put("actParam", AesEncrypt(JSON.toJSONString(map)));
 
         HttpRequest request = HttpUtil.createRequest(Method.POST,
@@ -557,15 +569,8 @@ public class IMTServiceImpl implements IMTService {
         request.header("userId", iUser.getUserId().toString());
 
         HttpResponse execute = request.body(JSONObject.toJSONString(map)).execute();
-
-        JSONObject body = JSONObject.parseObject(execute.body());
         //{"code":2000,"data":{"successDesc":"申购完成，请于7月6日18:00查看预约申购结果","reservationList":[{"reservationId":17053404357,"sessionId":678,"shopId":"233331084001","reservationTime":1688608601720,"itemId":"10214","count":1}],"reservationDetail":{"desc":"申购成功后将以短信形式通知您，请您在申购成功次日18:00前确认支付方式，并在7天内完成提货。","lotteryTime":1688637600000,"cacheValidTime":1688637600000}}}
-        if (body.getInteger("code") != 2000) {
-            String message = body.getString("message");
-            throw new ServiceException(message);
-        }
-//        logger.info(body.toJSONString());
-        return body;
+        return JSONObject.parseObject(execute.body());
     }
 
     /**

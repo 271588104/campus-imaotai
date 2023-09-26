@@ -38,6 +38,7 @@ public class IShopServiceImpl extends ServiceImpl<IShopMapper, IShop> implements
 
     @Autowired
     IShopMapper iShopMapper;
+
     @Autowired
     IItemMapper iItemMapper;
 
@@ -51,7 +52,7 @@ public class IShopServiceImpl extends ServiceImpl<IShopMapper, IShop> implements
 
         if (shopList != null && shopList.size() > 0) {
             return shopList;
-        }else {
+        } else {
             refreshShop();
         }
 
@@ -83,7 +84,6 @@ public class IShopServiceImpl extends ServiceImpl<IShopMapper, IShop> implements
         for (String iShopId : shopIdSet) {
             JSONObject shop = jsonObject.getJSONObject(iShopId);
             IShop iShop = new IShop(iShopId, shop);
-//            iShopMapper.insert(iShop);
             list.add(iShop);
         }
         this.saveBatch(list);
@@ -118,9 +118,7 @@ public class IShopServiceImpl extends ServiceImpl<IShopMapper, IShop> implements
             }
 
         }
-
         return mtSessionId;
-
     }
 
     @Override
@@ -198,7 +196,7 @@ public class IShopServiceImpl extends ServiceImpl<IShopMapper, IShop> implements
         //获取今日的门店信息列表
         List<IShop> list = iShops.stream().filter(i -> shopIdList.contains(i.getIShopId())).collect(Collectors.toList());
 
-        String shopId = "";
+        String shopId;
         if (shopType == 1) {
             //预约本市出货量最大的门店
             shopId = getMaxInventoryShopId(shopList, list, city);
@@ -219,8 +217,6 @@ public class IShopServiceImpl extends ServiceImpl<IShopMapper, IShop> implements
         if (StringUtils.isEmpty(shopId)) {
             throw new ServiceException("申购时根据类型获取的门店商品id为空");
         }
-
-
         return shopId;
     }
 
@@ -240,11 +236,9 @@ public class IShopServiceImpl extends ServiceImpl<IShopMapper, IShop> implements
 
         List<IMTItemInfo> collect = list1.stream().filter(i -> cityShopIdList.contains(i.getShopId())).sorted(Comparator.comparing(IMTItemInfo::getInventory).reversed()).collect(Collectors.toList());
 
-
         if (collect != null && collect.size() > 0) {
             return collect.get(0).getShopId();
         }
-
         return null;
     }
 
@@ -265,8 +259,8 @@ public class IShopServiceImpl extends ServiceImpl<IShopMapper, IShop> implements
         MapPoint myPoint = new MapPoint(Double.parseDouble(lat), Double.parseDouble(lng));
         for (IShop iShop : iShopList) {
             MapPoint point = new MapPoint(Double.parseDouble(iShop.getLat()), Double.parseDouble(iShop.getLng()));
-            Double disdance = getDisdance(myPoint, point);
-            iShop.setDistance(disdance);
+            Double distance = getDistance(myPoint, point);
+            iShop.setDistance(distance);
         }
 
         List<IShop> collect = iShopList.stream().sorted(Comparator.comparing(IShop::getDistance)).collect(Collectors.toList());
@@ -275,7 +269,7 @@ public class IShopServiceImpl extends ServiceImpl<IShopMapper, IShop> implements
 
     }
 
-    public static Double getDisdance(MapPoint point1, MapPoint point2) {
+    public static Double getDistance(MapPoint point1, MapPoint point2) {
         double lat1 = (point1.getLatitude() * Math.PI) / 180; //将角度换算为弧度
         double lat2 = (point2.getLatitude() * Math.PI) / 180; //将角度换算为弧度
         double latDifference = lat1 - lat2;

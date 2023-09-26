@@ -1,5 +1,6 @@
 package com.oddfar.campus.business.service;
 
+import com.alibaba.fastjson2.JSONObject;
 import com.oddfar.campus.business.entity.IUser;
 
 public interface IMTService {
@@ -41,7 +42,7 @@ public interface IMTService {
     /**
      * 获取申购耐力值
      */
-    String getEnergyAward(IUser iUser);
+    JSONObject getEnergyAward(IUser iUser);
 
     /**
      * 获得旅行奖励
