@@ -64,7 +64,6 @@ public class IMTServiceImpl implements IMTService {
     private IShopService iShopService;
 
     private final static String SALT = "2af72f100c356273d46284f6fd1dfc08";
-
     private final static String AES_KEY = "qbhajinldepmucsonaaaccgypwuvcjaa";
     private final static String AES_IV = "2018534749963515";
 
@@ -124,7 +123,6 @@ public class IMTServiceImpl implements IMTService {
         request.header("MT-Device-ID", deviceId);
         request.header("MT-APP-Version", getMTVersion());
         request.header("User-Agent", "iOS;16.3;Apple;?unrecognized?");
-
         request.header("Content-Type", "application/json");
 
         HttpResponse execute = request.body(JSONObject.toJSONString(data)).execute();
@@ -214,8 +212,6 @@ public class IMTServiceImpl implements IMTService {
             } finally {
                 //日志记录
                 IMTLogFactory.reservation(iUser, title, content);
-                //日志推送
-                PushPlusApi.sendNotice(iUser, title, content);
             }
         }
         //预约后延迟领取耐力值
@@ -241,12 +237,10 @@ public class IMTServiceImpl implements IMTService {
                 }
             } catch (Exception e) {
                 title = String.format("【领取耐力值出错】%s", iUser.getRemark());
-                content = String.format("手机号】%s【用户】%s\n【\n【结果返回】%s", iUser.getMobile(), iUser.getRemark(), e.getMessage());
+                content = String.format("【手机号】%s\n【用户】%s\n【结果返回】%s", iUser.getMobile(), iUser.getRemark(), e.getMessage());
             } finally {
                 //日志记录
                 IMTLogFactory.reservation(iUser, title, content);
-                //日志推送
-                PushPlusApi.sendNotice(iUser, title, content);
             }
         };
         new Thread(runnable).start();
@@ -272,15 +266,19 @@ public class IMTServiceImpl implements IMTService {
 
     @Override
     public void getTravelReward(IUser iUser) {
-        String logContent = "";
+        String title;
+        String content;
+
         try {
             String s = travelReward(iUser);
-            logContent += "[获得旅行奖励]:" + s;
+            title = String.format("【获得旅行奖励成功】%s", iUser.getRemark());
+            content = String.format("【手机号】%s\n【用户】%s\n【结果返回】%s", iUser.getMobile(), iUser.getRemark(), s);
         } catch (Exception e) {
-            logContent += "执行报错--[获得旅行奖励]:" + e.getMessage();
+            title = String.format("【获得旅行奖励失败】%s", iUser.getRemark());
+            content = String.format("【手机号】%s\n【用户】%s\n【结果返回】%s", iUser.getMobile(), iUser.getRemark(), e.getMessage());
         }
         //日志记录
-        IMTLogFactory.reservation(iUser, logContent);
+        IMTLogFactory.reservation(iUser, title, content);
     }
 
     /**
@@ -529,8 +527,6 @@ public class IMTServiceImpl implements IMTService {
                         }
                         //日志记录
                         IMTLogFactory.reservation(iUser, title, content);
-                        //日志推送
-                        PushPlusApi.sendNotice(iUser, title, content);
                     }
                 }
             } catch (Exception e) {
@@ -575,9 +571,6 @@ public class IMTServiceImpl implements IMTService {
 
     /**
      * 加密
-     *
-     * @param params
-     * @return
      */
     public static String AesEncrypt(String params) {
         AES aes = new AES(Mode.CBC, Padding.PKCS5Padding, AES_KEY.getBytes(), AES_IV.getBytes());
@@ -586,9 +579,6 @@ public class IMTServiceImpl implements IMTService {
 
     /**
      * 解密
-     *
-     * @param params
-     * @return
      */
     public static String AesDecrypt(String params) {
         AES aes = new AES(Mode.CBC, Padding.PKCS5Padding, AES_KEY.getBytes(), AES_IV.getBytes());
@@ -598,9 +588,6 @@ public class IMTServiceImpl implements IMTService {
     /**
      * 获取验证码的md5签名，密钥+手机号+时间
      * 登录的md5签名：密钥+mobile+vCode+ydLogId+ydToken
-     *
-     * @param content
-     * @return
      */
     private static String signature(String content) {
 
