@@ -21,7 +21,6 @@ public class IMTLogFactory {
         operateLog.setOperTime(new Date());
 
         if (title.contains("成功")) {
-            //失败
             operateLog.setStatus(0);
         } else {
             operateLog.setStatus(1);

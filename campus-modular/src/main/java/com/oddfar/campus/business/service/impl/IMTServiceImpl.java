@@ -14,7 +14,6 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.oddfar.campus.business.api.PushPlusApi;
 import com.oddfar.campus.business.entity.IShop;
 import com.oddfar.campus.business.entity.IUser;
 import com.oddfar.campus.business.mapper.IShopMapper;
@@ -501,6 +500,11 @@ public class IMTServiceImpl implements IMTService {
     public void appointmentResults() {
         logger.info("申购结果查询开始=========================");
         List<IUser> iUsers = iUserService.selectReservationUser();
+        String title = "申购结果";
+        Date currentDate = new Date();
+        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd");
+        String dateStr = format.format(currentDate);
+        String content = dateStr + "\n";
         for (IUser iUser : iUsers) {
             try {
                 String url = "https://app.moutai519.com.cn/xhr/front/mall/reservation/list/pageOne/query";
@@ -518,19 +522,19 @@ public class IMTServiceImpl implements IMTService {
                     JSONObject item = JSON.parseObject(itemVOs.toString());
                     // 预约时间在24小时内的
                     if (DateUtil.between(item.getDate("reservationTime"), new Date(), DateUnit.HOUR) < 24) {
-                        String title;
-                        String content = String.format("【申购项目】%s\n【申购时间】%s", item.getString("itemName"), item.getDate("reservationTime"));
                         if (item.getInteger("status") == 2) {
-                            title = String.format("【申购成功】%s", iUser.getRemark());
+                            content += String.format("【申购成功】【%s】【%s】【%s】\n", iUser.getRemark(), item.getString("itemName"), item.getDate("reservationTime"));
                         } else {
-                            title = String.format("【申购失败】%s", iUser.getRemark());
+                            content += String.format("【申购失败】【%s】【%s】【%s】\n", iUser.getRemark(), item.getString("itemName"), item.getDate("reservationTime"));
                         }
-                        //日志记录
-                        IMTLogFactory.reservation(iUser, title, content);
                     }
                 }
             } catch (Exception e) {
                 logger.error("查询申购结果失败:失败原因{}", e.getMessage());
+                content += String.format("【查询失败】【%s】【%s】\n", iUser.getRemark(), e.getMessage());
+            } finally {
+                //日志记录
+                IMTLogFactory.reservation(iUser, title, content);
             }
 
         }
