@@ -534,7 +534,9 @@ public class IMTServiceImpl implements IMTService {
                 content += String.format("【查询失败】【%s】【%s】\n", iUser.getRemark(), e.getMessage());
             } finally {
                 //日志记录
-                IMTLogFactory.reservation(iUser, title, content);
+                if (iUsers.size() - 1 == iUsers.indexOf(iUser)) {
+                    IMTLogFactory.reservation(iUser, title, content);
+                }
             }
 
         }
